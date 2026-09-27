@@ -15,6 +15,7 @@ from unirl.rollout.engine.sglang.backends import HTTPBackend, NativeBackend
 from unirl.rollout.engine.sglang.config import SGLangEngineConfig, SGLangPorts
 from unirl.rollout.engine.sglang.utils import deterministic_inference_enabled, resolve_sampling
 from unirl.rollout.engine.sglang.weight_sync import WeightSync
+from unirl.rollout.harness.protocol import ContextOverflowError
 from unirl.types.sample import Sample
 
 logger = logging.getLogger(__name__)
@@ -168,11 +169,26 @@ class SGLangRolloutEngine(BaseRolloutEngine):
             "SGLangRolloutEngine.generate requires a non-empty Sample (gen batch_size > 0)",
         )
         prepared = self.adapter.build_inputs(sample, sampling=sampling)
+        self._require_context_budget(prepared.prompt_token_ids, sampling)
         active_adapter = self._weight_sync.active_adapter
         if active_adapter:
             for payload in prepared.wire:
                 payload["lora_path"] = active_adapter
         return prepared
+
+    def _require_context_budget(self, prompt_token_ids: List[List[int]], sampling: Any) -> None:
+        """Reject a prompt that cannot fit the context window instead of letting SRT 400 and retry."""
+        budget = self.cfg.context_length
+        if budget is None or not prompt_token_ids:
+            return
+        longest = max(len(ids) for ids in prompt_token_ids)
+        reserved = int(sampling.block.get("max_new_tokens") or 0)
+        if longest + reserved <= int(budget):
+            return
+        raise ContextOverflowError(
+            f"prompt is {longest} tokens and max_new_tokens={reserved}, over the configured "
+            f"context_length={int(budget)}: clip tool observations or raise context_length"
+        )
 
     def _finish_generation(self, sample: Sample, prepared: Any, raw: List[Any]) -> Sample:
         return self._stamp_output_version(self.adapter.build_response(sample, prepared, raw))

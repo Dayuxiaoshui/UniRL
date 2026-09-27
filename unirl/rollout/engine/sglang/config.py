@@ -52,6 +52,8 @@ class SGLangEngineConfig(BaseEngineConfig):
 
     concurrency: int = 8
 
+    context_length: Optional[int] = None  # prompt-token budget; None disables the check
+
     enable_memory_saver: Optional[bool] = None
     enable_weights_cpu_backup: Optional[bool] = None
     skip_server_warmup: Optional[bool] = None
@@ -117,6 +119,10 @@ class SGLangEngineConfig(BaseEngineConfig):
         require(
             self.concurrency >= 1,
             f"SGLangEngineConfig.concurrency must be >= 1; got {self.concurrency!r}",
+        )
+        require(
+            self.context_length is None or self.context_length >= 1,
+            f"SGLangEngineConfig.context_length must be >= 1 when set; got {self.context_length!r}",
         )
 
         self.backend = str(self.backend).strip().lower()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from unirl.rollout.harness.protocol import HarnessContext, HarnessOutcome
+from unirl.rollout.harness.protocol import ContextOverflowError, HarnessContext, HarnessOutcome
 
 if TYPE_CHECKING:
     from unirl.rollout.env.protocol import Environment
@@ -39,6 +39,9 @@ class ToolAgentHarness:
                 if observation is not None:
                     sample = sample.observe(observation)
             return HarnessOutcome(sample, "completed")
+        except ContextOverflowError as exc:
+            logger.warning("ToolAgentHarness: trajectory overflowed the context window: %s", exc)
+            return HarnessOutcome(sample, "overflow")
         except Exception as exc:  # noqa: BLE001 — isolate: one bad trajectory must not sink the drain
             logger.warning("ToolAgentHarness: trajectory failed: %s", exc, exc_info=True)
             return HarnessOutcome(sample, "failed")

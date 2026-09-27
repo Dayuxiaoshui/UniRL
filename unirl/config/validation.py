@@ -138,6 +138,38 @@ def validate_rollout_layout(cfg: DictConfig) -> None:
         )
 
 
+_SGLANG_ENGINE_CONFIG_SUFFIX = "SGLangEngineConfig"
+
+_NO_MEMORY_SAVER_MESSAGE = (
+    "colocated rollout sleeps the SGLang engine to hand the GPU back to training, "
+    "but enable_memory_saver is unset: SGLang then installs the Noop "
+    "TorchMemorySaverAdapter, so release_memory_occupation returns HTTP 200 and "
+    "frees nothing. Set enable_memory_saver: true on the SGLang engine config "
+    "(plus enable_weights_cpu_backup: true to move weights to host across the "
+    "sleep), and re-check mem_fraction_static against the wake window afterwards."
+)
+
+
+def _sglang_engine_config(rollout_cfg: DictConfig) -> Any:
+    """Unwrap a rollout section down to the SGLang engine config it nests, if any."""
+    node = rollout_cfg.get("config")
+    while isinstance(node, DictConfig):
+        if str(node.get("_target_") or "").endswith(_SGLANG_ENGINE_CONFIG_SUFFIX):
+            return node
+        node = node.get("inner")
+    return None
+
+
+def validate_memory_saver_contract(rollout_cfg: DictConfig, *, strict: bool) -> None:
+    """A colocated engine that sleeps must enable the memory saver, or sleep frees nothing."""
+    engine_cfg = _sglang_engine_config(rollout_cfg)
+    if engine_cfg is None or bool(engine_cfg.get("enable_memory_saver", False)):
+        return
+    if strict:
+        raise ValueError(_NO_MEMORY_SAVER_MESSAGE)
+    logger.warning(_NO_MEMORY_SAVER_MESSAGE)
+
+
 def validate_offload_contract(cfg: DictConfig) -> None:
     """Direct-sampling mode forbids GPU offloading (there is no paired rollout actor)."""
     if not is_direct_sampling(cfg):
@@ -287,6 +319,7 @@ __all__ = [
     "is_direct_sampling",
     "validate_dynamic_dotpaths",
     "validate_lora_target_modules",
+    "validate_memory_saver_contract",
     "validate_multi_track_mini_batch_geometry",
     "validate_offload_contract",
     "validate_precision_type",

@@ -163,6 +163,30 @@ enabled, which UniRL's rollout backend does not do.
   auxiliary features fail closed. `use_lora=true` selects adapter-only sync for
   the engine lifetime. Full-weight sync requires `use_lora=false`; a trainer
   using LoRA must merge the adapter before pushing those full weights.
+- **A colocated engine without `enable_memory_saver` never gives the GPU back.**
+  SGLang defaults the flag off and installs a Noop `TorchMemorySaverAdapter`, so
+  `release_memory_occupation` answers HTTP 200 and frees nothing. Pair it with
+  `enable_weights_cpu_backup: true` to park weights on the host across the sleep.
+  `validate_memory_saver_contract` raises on the agentic path and warns on AR.
+- **`mem_fraction_static` is bounded by the wake window, not by rollout.** In
+  `AgenticTrainer._collect_groups` the order is `wake_up()` → `sync_weights()` →
+  `backend.offload()`, and `offload()` holds the only `empty_cache()`. So the
+  engine resumes while the full train state is still resident, and
+  `torch_memory_saver`'s VMM-backed `resume()` cannot reuse blocks torch's caching
+  allocator has reserved. Measured on 2×H20 (97,871 MiB) with Qwen3-4B fp32: `0.4`
+  peaks at 68–85% of the card across three runs, `0.45` at 88%, `0.6` dies in
+  `resume()` with `cudaError 2 (out of memory)`. Pick the value from a measured peak
+  with margin — trajectory turn counts vary, and that spread (~16 points at a fixed
+  `0.4`) is wider than the gap to the next setting, so one run is not a measurement.
+- **KV offload (HiCache, mooncake) only pays above the radix-cache knee.** Let
+  `R = (concurrency × per-trajectory context) / KV pool`. Measured on one H20 with
+  Qwen3-4B at 8 turns × (2048 generated + 2000 observation) tokens, prefix reuse
+  holds at 73–75% up to `R = 1.04`, then falls to 40% at `R = 1.52` and 15% at
+  `R = 2.4`. Below the knee a host tier has nothing to recover and costs nothing;
+  above it a 64 GiB HiCache tier restored reuse to the 87.6% ceiling (−14% wall
+  clock at `R = 1.6`, −26% at `R = 2.4`). Raising `mem_fraction_static` *lowers*
+  `R` — at that shape `0.3` sits at `R = 1.51` and `0.4` at `1.04` — so re-measure
+  `R` after any pool change before reaching for a cache tier.
 - **Never recompute σ inside an engine** — the generated Part's pinned sigmas are
   the single source of truth; `engine/sigma_verify.py` checks the backend echo (it
   guards the GRPO log-prob ratio).

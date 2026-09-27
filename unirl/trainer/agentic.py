@@ -12,6 +12,7 @@ import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
+from unirl.config.validation import validate_memory_saver_contract
 from unirl.distributed.group.placement import placement, remote
 from unirl.distributed.tensor import hydrate
 from unirl.rollout.manager import RolloutManager, required_worker_concurrency, validate_worker_inflight
@@ -43,7 +44,9 @@ def _extract_answer(text: Optional[str]) -> str:
 
 
 def _is_failed(trajectory: Sample) -> bool:
-    return not trajectory.gen_parts() or not trajectory.parts or trajectory.parts[-1].harness_status == "failed"
+    if not trajectory.gen_parts() or not trajectory.parts:
+        return True
+    return trajectory.parts[-1].harness_status in ("failed", "overflow")
 
 
 class AgenticTrainer(BaseTrainer):
@@ -148,6 +151,7 @@ class AgenticTrainer(BaseTrainer):
         sync_target = str(sync_cfg.get("_target_", ""))
         if not sync_target.endswith("TensorWeightSync"):
             raise ValueError(f"AgenticTrainer requires colocated TensorWeightSync; got {sync_target!r}")
+        validate_memory_saver_contract(rollout_cfg, strict=True)
 
         episode = rollout_cfg.get("config", {}).get("episode_sampling")
         if episode is None:
@@ -334,14 +338,16 @@ class AgenticTrainer(BaseTrainer):
                 train_parts.append(generated)
 
         depths = [len(trajectory.gen_parts()) for trajectory in trajectories]
+        statuses = Counter((t.parts[-1].harness_status or "unknown") if t.parts else "empty" for t in trajectories)
         logger.info(
-            "rollout %d trajectory turns: n=%d mean=%.2f min=%d max=%d hist=%s",
+            "rollout %d trajectory turns: n=%d mean=%.2f min=%d max=%d hist=%s status=%s",
             rollout_id,
             len(depths),
             (sum(depths) / len(depths)) if depths else 0.0,
             min(depths, default=0),
             max(depths, default=0),
             dict(sorted(Counter(depths).items())),
+            dict(sorted(statuses.items())),
         )
         if train_parts:
             train_part = self._pad_to_dp_multiple(Part.concat(train_parts))

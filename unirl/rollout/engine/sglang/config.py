@@ -12,6 +12,7 @@ from unirl.rollout.engine.ports import ReservedPorts
 _REQUIRED_SERVER_ARGS_METADATA_KEY = "_unirl_required_server_args"
 _LOAD_BEARING_SERVER_ARGS = frozenset(
     {
+        "context_length",
         "ep_size",
         "enable_memory_saver",
         "enable_weights_cpu_backup",
@@ -52,7 +53,7 @@ class SGLangEngineConfig(BaseEngineConfig):
 
     concurrency: int = 8
 
-    context_length: Optional[int] = None  # prompt-token budget; None disables the check
+    context_length: Optional[int] = None  # server context window; also caps each request's max_new_tokens
 
     enable_memory_saver: Optional[bool] = None
     enable_weights_cpu_backup: Optional[bool] = None
@@ -120,6 +121,13 @@ class SGLangEngineConfig(BaseEngineConfig):
             self.concurrency >= 1,
             f"SGLangEngineConfig.concurrency must be >= 1; got {self.concurrency!r}",
         )
+        engine_kwargs_context_length = self.engine_kwargs.get("context_length")
+        require(
+            self.context_length is None or engine_kwargs_context_length is None,
+            "Set SGLangEngineConfig.context_length or engine_kwargs.context_length, not both",
+        )
+        if self.context_length is None:
+            self.context_length = engine_kwargs_context_length
         require(
             self.context_length is None or self.context_length >= 1,
             f"SGLangEngineConfig.context_length must be >= 1 when set; got {self.context_length!r}",
@@ -163,6 +171,8 @@ class SGLangEngineConfig(BaseEngineConfig):
             intent["ep_size"] = int(self.ep_size)
         if self.dp_size is not None:
             intent["dp_size"] = int(self.dp_size)
+        if self.context_length is not None:
+            intent["context_length"] = int(self.context_length)
         if self.enable_memory_saver is not None:
             intent["enable_memory_saver"] = bool(self.enable_memory_saver)
         if self.enable_weights_cpu_backup is not None:

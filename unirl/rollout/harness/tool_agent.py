@@ -6,12 +6,19 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from unirl.rollout.harness.protocol import ContextOverflowError, HarnessContext, HarnessOutcome
+from unirl.types.segments.base import SegmentStatus
 
 if TYPE_CHECKING:
     from unirl.rollout.env.protocol import Environment
     from unirl.types.sample import Sample
 
 logger = logging.getLogger(__name__)
+
+
+def _cut_off(sample: "Sample") -> bool:
+    """The last turn stopped on a token budget (context window or max_new_tokens), not on EOS/stop."""
+    status = sample.gen_parts()[-1].status
+    return status is not None and bool((status == SegmentStatus.TRUNCATED).any())
 
 
 class ToolAgentHarness:
@@ -35,7 +42,7 @@ class ToolAgentHarness:
                 sample = context.generate(self.ENGINE, sample.fork(1, sampling_params=self.sampling))
                 observation, done, _ = self.env.step(sample)
                 if done:
-                    return HarnessOutcome(sample, "completed")
+                    return HarnessOutcome(sample, "overflow" if _cut_off(sample) else "completed")
                 if observation is not None:
                     sample = sample.observe(observation)
             return HarnessOutcome(sample, "completed")

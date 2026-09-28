@@ -159,6 +159,7 @@ class SGLangRolloutEngine(BaseRolloutEngine):
             self._backend,
             uses_lora=bool(engine_kwargs.get("enable_lora", False)),
         )
+        self._max_input_tokens = self._backend.max_input_tokens() if config.context_length is not None else None
 
         self._version = 0
 
@@ -169,26 +170,26 @@ class SGLangRolloutEngine(BaseRolloutEngine):
             "SGLangRolloutEngine.generate requires a non-empty Sample (gen batch_size > 0)",
         )
         prepared = self.adapter.build_inputs(sample, sampling=sampling)
-        self._require_context_budget(prepared.prompt_token_ids, sampling)
+        self._fit_context_budget(prepared)
         active_adapter = self._weight_sync.active_adapter
         if active_adapter:
             for payload in prepared.wire:
                 payload["lora_path"] = active_adapter
         return prepared
 
-    def _require_context_budget(self, prompt_token_ids: List[List[int]], sampling: Any) -> None:
-        """Reject a prompt that cannot fit the context window instead of letting SRT 400 and retry."""
+    def _fit_context_budget(self, prepared: Any) -> None:
+        """Clamp each request's max_new_tokens to the context left; raise once the server would reject the prompt."""
         budget = self.cfg.context_length
-        if budget is None or not prompt_token_ids:
+        if budget is None:
             return
-        longest = max(len(ids) for ids in prompt_token_ids)
-        reserved = int(sampling.block.get("max_new_tokens") or 0)
-        if longest + reserved <= int(budget):
-            return
-        raise ContextOverflowError(
-            f"prompt is {longest} tokens and max_new_tokens={reserved}, over the configured "
-            f"context_length={int(budget)}: clip tool observations or raise context_length"
-        )
+        for payload, ids in zip(prepared.wire, prepared.prompt_token_ids, strict=True):
+            if len(ids) >= self._max_input_tokens:
+                raise ContextOverflowError(
+                    f"prompt is {len(ids)} tokens, at the server's max_req_input_len={self._max_input_tokens} "
+                    f"(context_length={budget}): clip tool observations or raise context_length"
+                )
+            sampling_params = payload["sampling_params"]
+            sampling_params["max_new_tokens"] = min(sampling_params["max_new_tokens"], budget - len(ids))
 
     def _finish_generation(self, sample: Sample, prepared: Any, raw: List[Any]) -> Sample:
         return self._stamp_output_version(self.adapter.build_response(sample, prepared, raw))

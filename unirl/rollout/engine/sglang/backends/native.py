@@ -330,6 +330,11 @@ class NativeBackend:
         )
         self._check_result(result, "resume_memory")
 
+    def max_input_tokens(self) -> int:
+        """The scheduler's prompt-length limit (``max_req_input_len``), a few tokens under ``context_length``."""
+        self._require_alive("read max_req_input_len")
+        return int(self._engine.tokenizer_manager.max_req_input_len)
+
     def ping(self) -> bool:
         """Liveness of the Engine's child processes (schedulers + detokenizer)."""
         if self._engine is None:

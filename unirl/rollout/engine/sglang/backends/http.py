@@ -480,6 +480,12 @@ class HTTPBackend:
             "resume_memory",
         )
 
+    def max_input_tokens(self) -> int:
+        """The scheduler's prompt-length limit (``max_req_input_len``), a few tokens under ``context_length``."""
+        self._require_alive("read max_req_input_len")
+        with urllib.request.urlopen(f"{self._base_url}/server_info", timeout=30) as resp:
+            return int(json.loads(resp.read())["max_req_input_len"])
+
     def ping(self) -> bool:
         if self._server_process is None or not self._server_process.is_alive():
             return False

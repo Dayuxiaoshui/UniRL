@@ -144,7 +144,7 @@ _NO_MEMORY_SAVER_MESSAGE = (
     "colocated rollout sleeps the SGLang engine to hand the GPU back to training, "
     "but enable_memory_saver is unset: SGLang then installs the Noop "
     "TorchMemorySaverAdapter, so release_memory_occupation returns HTTP 200 and "
-    "frees nothing. Set enable_memory_saver: true on the SGLang engine config "
+    "frees nothing. Set enable_memory_saver: true on the SGLang engine config or its engine_kwargs "
     "(plus enable_weights_cpu_backup: true to move weights to host across the "
     "sleep), and re-check mem_fraction_static against the wake window afterwards."
 )
@@ -163,7 +163,13 @@ def _sglang_engine_config(rollout_cfg: DictConfig) -> Any:
 def validate_memory_saver_contract(rollout_cfg: DictConfig, *, strict: bool) -> None:
     """A colocated engine that sleeps must enable the memory saver, or sleep frees nothing."""
     engine_cfg = _sglang_engine_config(rollout_cfg)
-    if engine_cfg is None or bool(engine_cfg.get("enable_memory_saver", False)):
+    if engine_cfg is None:
+        return
+    # Same precedence as SGLangEngineConfig.server_intent: a set field overrides engine_kwargs.
+    enabled = engine_cfg.get("enable_memory_saver")
+    if enabled is None:
+        enabled = (engine_cfg.get("engine_kwargs") or {}).get("enable_memory_saver")
+    if enabled:
         return
     if strict:
         raise ValueError(_NO_MEMORY_SAVER_MESSAGE)

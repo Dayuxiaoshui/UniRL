@@ -100,7 +100,7 @@ class AgenticTrainer(BaseTrainer):
             self._group_size = total_samples_per_prompt(self.sampling_params)
             self._stop = list(stop) if stop else ["</tool_call>"]
             self._per_worker_inflight = per_worker_inflight
-            self._mask_overflow_loss = bool(mask_overflow_loss)
+            self._mask_overflow_loss = mask_overflow_loss
 
             with placement(self.pool, fraction=1.0, shared_workers=True):
                 self.bundle = remote_hydra(bundle_cfg)
@@ -341,7 +341,7 @@ class AgenticTrainer(BaseTrainer):
                 train_parts.append(generated)
 
         depths = [len(trajectory.gen_parts()) for trajectory in trajectories]
-        statuses = Counter((t.parts[-1].harness_status or "unknown") if t.parts else "empty" for t in trajectories)
+        statuses = Counter(t.parts[-1].harness_status for t in trajectories)
         logger.info(
             "rollout %d trajectory turns: n=%d mean=%.2f min=%d max=%d hist=%s status=%s",
             rollout_id,

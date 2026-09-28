@@ -132,7 +132,7 @@ class ARTrainer(BaseTrainer):
             int(rollout_anchor_device) if rollout_anchor_device is not None else None
         )
         self._enable_fsdp_offload = bool(enable_fsdp_offload)
-        if self._enable_fsdp_offload:
+        if self._rollout_anchor_device is None or self._enable_fsdp_offload:
             validate_memory_saver_contract(rollout_cfg, strict=False)
         self._anchored_backend_offloaded: Optional[bool] = False
         self._anchored_rollout_awake: Optional[bool] = None

@@ -141,7 +141,7 @@ def validate_rollout_layout(cfg: DictConfig) -> None:
 _NO_MEMORY_SAVER_MESSAGE = (
     "colocated rollout sleeps the SGLang engine to hand the GPU back to training, "
     "but enable_memory_saver is unset: SGLang then installs the Noop "
-    "TorchMemorySaverAdapter, so release_memory_occupation returns HTTP 200 and "
+    "TorchMemorySaverAdapter, so release_memory_occupation reports success and "
     "frees nothing. Set enable_memory_saver: true on the SGLang engine config or its engine_kwargs "
     "(plus enable_weights_cpu_backup: true to move weights to host across the "
     "sleep), and re-check mem_fraction_static against the wake window afterwards."

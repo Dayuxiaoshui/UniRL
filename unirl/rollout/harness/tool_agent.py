@@ -15,12 +15,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _cut_off(sample: "Sample") -> bool:
-    """The last turn stopped on a token budget (context window or max_new_tokens), not on EOS/stop."""
-    status = sample.gen_parts()[-1].status
-    return status is not None and bool((status == SegmentStatus.TRUNCATED).any())
-
-
 class ToolAgentHarness:
     """``generate -> env.step -> observe`` until ``done`` / ``max_turns``, on the ``"policy"`` engine."""
 
@@ -42,7 +36,10 @@ class ToolAgentHarness:
                 sample = context.generate(self.ENGINE, sample.fork(1, sampling_params=self.sampling))
                 observation, done, _ = self.env.step(sample)
                 if done:
-                    return HarnessOutcome(sample, "overflow" if _cut_off(sample) else "completed")
+                    # A final turn cut at a token budget (context or max_new_tokens) never reached EOS.
+                    status = sample.gen_parts()[-1].status
+                    cut_off = status is not None and bool((status == SegmentStatus.TRUNCATED).any())
+                    return HarnessOutcome(sample, "overflow" if cut_off else "completed")
                 if observation is not None:
                     sample = sample.observe(observation)
             return HarnessOutcome(sample, "completed")

@@ -96,7 +96,7 @@ rollout:
       concurrency: 8
       context_length: 40960 # Qwen3-4B window, also passed to the server; each turn is clamped to what is left
       # Make this colocated engine's sleep() actually free GPU (KV + weights→CPU);
-      # without both it is a silent no-op that returns HTTP 200 and frees nothing.
+      # without both it is a silent no-op that reports success and frees nothing.
       enable_memory_saver: true
       enable_weights_cpu_backup: true
       # The deep-research framing — verbatim from AReaL's tongyi_deepresearch
@@ -181,7 +181,7 @@ data_source:
   args:
     run:
       data_path: ${oc.env:DATA_PATH} # ASearcher jsonl: {"prompt": ..., "metadata": {"answer": ...}}
-      eval_data_path: ${oc.env:EVAL_DATA_PATH,${oc.env:DATA_PATH}}
+      eval_data_path: ${oc.env:EVAL_DATA_PATH,null}
       seed: 42
     algorithm:
       prompts_per_rollout: ${batch_size}

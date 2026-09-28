@@ -172,26 +172,21 @@ class SGLangRolloutEngine(BaseRolloutEngine):
             "SGLangRolloutEngine.generate requires a non-empty Sample (gen batch_size > 0)",
         )
         prepared = self.adapter.build_inputs(sample, sampling=sampling)
-        self._fit_context_budget(prepared)
+        budget = self.cfg.context_length
+        if budget is not None:
+            for payload, ids in zip(prepared.wire, prepared.prompt_token_ids, strict=True):
+                if len(ids) >= budget - _SERVER_INPUT_MARGIN:
+                    raise ContextOverflowError(
+                        f"prompt is {len(ids)} tokens, at the server's input limit under "
+                        f"context_length={budget}: clip tool observations or raise context_length"
+                    )
+                sampling_params = payload["sampling_params"]
+                sampling_params["max_new_tokens"] = min(sampling_params["max_new_tokens"], budget - len(ids))
         active_adapter = self._weight_sync.active_adapter
         if active_adapter:
             for payload in prepared.wire:
                 payload["lora_path"] = active_adapter
         return prepared
-
-    def _fit_context_budget(self, prepared: Any) -> None:
-        """Clamp each request's max_new_tokens to the context left; raise once the server would reject the prompt."""
-        budget = self.cfg.context_length
-        if budget is None:
-            return
-        for payload, ids in zip(prepared.wire, prepared.prompt_token_ids, strict=True):
-            if len(ids) >= budget - _SERVER_INPUT_MARGIN:
-                raise ContextOverflowError(
-                    f"prompt is {len(ids)} tokens, at the server's input limit under "
-                    f"context_length={budget}: clip tool observations or raise context_length"
-                )
-            sampling_params = payload["sampling_params"]
-            sampling_params["max_new_tokens"] = min(sampling_params["max_new_tokens"], budget - len(ids))
 
     def _finish_generation(self, sample: Sample, prepared: Any, raw: List[Any]) -> Sample:
         return self._stamp_output_version(self.adapter.build_response(sample, prepared, raw))

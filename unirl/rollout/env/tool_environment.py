@@ -125,7 +125,9 @@ class ToolEnvironment:
 
         sessions = sample.parts[0].control.get("tool_sessions", {})
         calls = [parse_tool_call(t) for t in texts]
-        results: List[Optional[str]] = [self._clip(self._run(c, sessions)) if c is not None else None for c in calls]
+        results: List[Optional[str]] = [
+            self._clip_observation(self._run(c, sessions)) if c is not None else None for c in calls
+        ]
         per_sample_done = [c is None for c in calls]
         any_call = any(c is not None for c in calls)
 
@@ -159,7 +161,7 @@ class ToolEnvironment:
         except Exception as exc:  # noqa: BLE001 — tool errors are fed back to the model, not raised
             return f"Error: {exc}"
 
-    def _clip(self, result: str) -> str:
+    def _clip_observation(self, result: str) -> str:
         """Cap one observation so an unsummarized tool dump cannot eat the whole context."""
         cap = self._max_observation_chars
         if cap is None or len(result) <= cap:

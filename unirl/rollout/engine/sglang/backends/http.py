@@ -37,7 +37,7 @@ class SRTHTTPError(RuntimeError):
 
     def __init__(self, message: str, *, code: int) -> None:
         super().__init__(message)
-        self.code = int(code)
+        self.code = code
 
 
 def _signal_process_tree(pid: int, sig: signal.Signals) -> None:

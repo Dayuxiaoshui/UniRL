@@ -138,8 +138,6 @@ def validate_rollout_layout(cfg: DictConfig) -> None:
         )
 
 
-_SGLANG_ENGINE_CONFIG_SUFFIX = "SGLangEngineConfig"
-
 _NO_MEMORY_SAVER_MESSAGE = (
     "colocated rollout sleeps the SGLang engine to hand the GPU back to training, "
     "but enable_memory_saver is unset: SGLang then installs the Noop "
@@ -150,20 +148,12 @@ _NO_MEMORY_SAVER_MESSAGE = (
 )
 
 
-def _sglang_engine_config(rollout_cfg: DictConfig) -> Any:
-    """Unwrap a rollout section down to the SGLang engine config it nests, if any."""
-    node = rollout_cfg.get("config")
-    while isinstance(node, DictConfig):
-        if str(node.get("_target_") or "").endswith(_SGLANG_ENGINE_CONFIG_SUFFIX):
-            return node
-        node = node.get("inner")
-    return None
-
-
 def validate_memory_saver_contract(rollout_cfg: DictConfig, *, strict: bool) -> None:
     """A colocated engine that sleeps must enable the memory saver, or sleep frees nothing."""
-    engine_cfg = _sglang_engine_config(rollout_cfg)
-    if engine_cfg is None:
+    engine_cfg = rollout_cfg.get("config")
+    while isinstance(engine_cfg, DictConfig) and not (engine_cfg.get("_target_") or "").endswith("SGLangEngineConfig"):
+        engine_cfg = engine_cfg.get("inner")
+    if not isinstance(engine_cfg, DictConfig):
         return
     # Same precedence as SGLangEngineConfig.server_intent: a set field overrides engine_kwargs.
     enabled = engine_cfg.get("enable_memory_saver")

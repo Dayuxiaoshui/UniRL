@@ -20,6 +20,9 @@ from unirl.types.sample import Sample
 
 logger = logging.getLogger(__name__)
 
+# SGLang's scheduler rejects prompts at max_req_input_len = context_len - 1 - 5 tokens.
+_SERVER_INPUT_MARGIN = 6
+
 
 class SGLangRolloutEngine(BaseRolloutEngine):
     """LLM/VLM rollout engine backed by a SGLang SRT server (v2 layout)."""
@@ -159,7 +162,6 @@ class SGLangRolloutEngine(BaseRolloutEngine):
             self._backend,
             uses_lora=bool(engine_kwargs.get("enable_lora", False)),
         )
-        self._max_input_tokens = self._backend.max_input_tokens() if config.context_length is not None else None
 
         self._version = 0
 
@@ -183,10 +185,10 @@ class SGLangRolloutEngine(BaseRolloutEngine):
         if budget is None:
             return
         for payload, ids in zip(prepared.wire, prepared.prompt_token_ids, strict=True):
-            if len(ids) >= self._max_input_tokens:
+            if len(ids) >= budget - _SERVER_INPUT_MARGIN:
                 raise ContextOverflowError(
-                    f"prompt is {len(ids)} tokens, at the server's max_req_input_len={self._max_input_tokens} "
-                    f"(context_length={budget}): clip tool observations or raise context_length"
+                    f"prompt is {len(ids)} tokens, at the server's input limit under "
+                    f"context_length={budget}: clip tool observations or raise context_length"
                 )
             sampling_params = payload["sampling_params"]
             sampling_params["max_new_tokens"] = min(sampling_params["max_new_tokens"], budget - len(ids))

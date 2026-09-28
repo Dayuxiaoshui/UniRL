@@ -23,10 +23,7 @@ num_rollouts: 200
 worker_max_concurrency: 10
 per_worker_inflight: 4 # per-slot trajectory cap (2 slots x 4 covers the 8 concurrent tasks)
 stop: ["</tool_call>"]
-# Overflow trajectories (out of rollout.config.inner.context_length, or a final turn cut at
-# max_new_tokens) are scored like any other. true keeps them in their group's baseline but
-# drops their gradient (DAPO overlong filtering).
-mask_overflow_loss: false
+mask_overflow_loss: false # true: overflow trajectories keep their baseline share but get no gradient
 
 sampling:
   _target_: unirl.types.sampling.ARSamplingParams
@@ -97,10 +94,7 @@ rollout:
       pretrained_model_ckpt_path: ${oc.env:QWEN3_INSTRUCT_PATH,Qwen/Qwen3-4B-Instruct}
       tp_size: 1
       concurrency: 8
-      # Qwen3-4B max_position_embeddings. Also sets the SGLang server's context_length; each turn's
-      # max_new_tokens is clamped to what is left, and a prompt at the server's input limit ends the
-      # trajectory as overflow.
-      context_length: 40960
+      context_length: 40960 # Qwen3-4B window, also passed to the server; each turn is clamped to what is left
       # Make this colocated engine's sleep() actually free GPU (KV + weights→CPU);
       # without both it is a silent no-op that returns HTTP 200 and frees nothing.
       enable_memory_saver: true

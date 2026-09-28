@@ -121,13 +121,6 @@ class SGLangEngineConfig(BaseEngineConfig):
             self.concurrency >= 1,
             f"SGLangEngineConfig.concurrency must be >= 1; got {self.concurrency!r}",
         )
-        engine_kwargs_context_length = self.engine_kwargs.get("context_length")
-        require(
-            self.context_length is None or engine_kwargs_context_length is None,
-            "Set SGLangEngineConfig.context_length or engine_kwargs.context_length, not both",
-        )
-        if self.context_length is None:
-            self.context_length = engine_kwargs_context_length
         require(
             self.context_length is None or self.context_length >= 1,
             f"SGLangEngineConfig.context_length must be >= 1 when set; got {self.context_length!r}",

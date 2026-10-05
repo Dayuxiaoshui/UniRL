@@ -125,6 +125,11 @@ class SGLangEngineConfig(BaseEngineConfig):
             self.context_length is None or self.context_length >= 1,
             f"SGLangEngineConfig.context_length must be >= 1 when set; got {self.context_length!r}",
         )
+        require(
+            "context_length" not in self.engine_kwargs,
+            "SGLangEngineConfig.engine_kwargs must not set context_length; set the context_length field, "
+            "which the client also clamps each request's max_new_tokens against",
+        )
 
         self.backend = str(self.backend).strip().lower()
         require(

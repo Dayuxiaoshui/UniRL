@@ -167,10 +167,7 @@ class ToolEnvironment:
         if cap is None or len(result) <= cap:
             return result
         logger.info("ToolEnvironment: clipped a %d-char observation to %d", len(result), cap)
-        marker = "\n[observation truncated]"
-        if cap <= len(marker):
-            return result[:cap]
-        return result[: cap - len(marker)] + marker
+        return f"{result[:cap]}\n[observation truncated to {cap} characters]"
 
     def close(self, sample: Sample) -> None:
         """Guaranteed teardown: end every open tool session for this trajectory."""

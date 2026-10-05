@@ -98,7 +98,8 @@ The included tools are:
   suppressed.
 - A trajectory that runs out of token budget is an `overflow` outcome: the next prompt reaches the
   SGLang server's input limit under `context_length`, or the final turn is cut at `max_new_tokens`
-  (clamped to the context left). It is scored like a completed trajectory.
+  (clamped to the context left). It is scored like a completed trajectory. A prompt that overflows
+  before the first turn has nothing to score and is a `failed` outcome.
 - `max_turns` is the hard engine bound. When an environment also exposes
   `max_turns`, the production engine requires it to match. `ToolEnvironment`
   also terminates when no row calls a tool.

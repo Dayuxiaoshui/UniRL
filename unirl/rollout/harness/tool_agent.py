@@ -45,7 +45,8 @@ class ToolAgentHarness:
             return HarnessOutcome(sample, "completed")
         except ContextOverflowError as exc:
             logger.warning("ToolAgentHarness: trajectory overflowed the context window: %s", exc)
-            return HarnessOutcome(sample, "overflow")
+            # A prompt that overflows before any turn leaves nothing to score or train.
+            return HarnessOutcome(sample, "overflow" if sample.gen_parts() else "failed")
         except Exception as exc:  # noqa: BLE001 — isolate: one bad trajectory must not sink the drain
             logger.warning("ToolAgentHarness: trajectory failed: %s", exc, exc_info=True)
             return HarnessOutcome(sample, "failed")
